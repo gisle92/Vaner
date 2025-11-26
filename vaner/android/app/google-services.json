@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "487621717466",
+    "project_id": "vaner-f83ef",
+    "storage_bucket": "vaner-f83ef.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:487621717466:android:e22aa3269cfb587aa9a4e3",
+        "android_client_info": {
+          "package_name": "com.example.vaner"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "487621717466-0dggen71k5bithdeileteieh6pcjirlr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCw9jYFPqnVfd6dAW8VqDWkzfJvENgOU9s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "487621717466-0dggen71k5bithdeileteieh6pcjirlr.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "487621717466-9gf8r31cf34nvhuso9oovg68lr26r9gu.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.vaner"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
