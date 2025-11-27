@@ -6,6 +6,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+import 'habit_suggestions.dart';
+import 'push_notifications.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
@@ -40,7 +43,6 @@ class VanerApp extends StatelessWidget {
             color: Color(0xFF0F172A),
           ),
         ),
-        // NOTE: CardThemeData (not CardTheme) to match new Flutter API
         cardTheme: CardThemeData(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -87,15 +89,27 @@ class AuthGate extends StatelessWidget {
 class SignInScreen extends StatelessWidget {
   const SignInScreen({super.key});
 
-  Future<void> _signInWithGoogle() async {
+  Future<void> _signInWithGoogle(BuildContext context) async {
     final provider = GoogleAuthProvider();
 
-    if (kIsWeb) {
-      // Web: popup sign-in
-      await FirebaseAuth.instance.signInWithPopup(provider);
-    } else {
-      // Mobile / desktop: new provider API in firebase_auth 6.x
-      await FirebaseAuth.instance.signInWithProvider(provider);
+    try {
+      if (kIsWeb) {
+        // Web: popup sign-in
+        await FirebaseAuth.instance.signInWithPopup(provider);
+      } else {
+        // Mobile / desktop: new provider API in firebase_auth 6.x
+        await FirebaseAuth.instance.signInWithProvider(provider);
+      }
+    } on FirebaseAuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kunne ikke logge inn: ${e.code}')),
+      );
+      debugPrint('FirebaseAuthException: ${e.code} – ${e.message}');
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ukjent feil ved innlogging')),
+      );
+      debugPrint('Unknown sign-in error: $e');
     }
   }
 
@@ -147,7 +161,7 @@ class SignInScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 24),
                       FilledButton.icon(
-                        onPressed: _signInWithGoogle,
+                        onPressed: () => _signInWithGoogle(context),
                         icon: const Icon(Icons.login),
                         label: const Text('Logg inn med Google'),
                         style: FilledButton.styleFrom(
@@ -195,42 +209,40 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String get _todayKey => _dateKeyFromDate(DateTime.now());
 
-  Future<void> _addHabitDialog() async {
-    final controller = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Ny vane'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(
-              hintText: 'f.eks. 10 push-ups',
-            ),
-            autofocus: true,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Avbryt'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final text = controller.text.trim();
-                if (text.isNotEmpty) {
-                  Navigator.of(context).pop(text);
-                }
-              },
-              child: const Text('Lagre'),
-            ),
-          ],
-        );
+  @override
+  void initState() {
+    super.initState();
+    _ensureUserProfile();
+    // Start push notifications (Android/iOS). Web is skipped inside init().
+    PushNotifications().init(widget.user);
+  }
+
+  Future<void> _ensureUserProfile() async {
+    final user = widget.user;
+    final userRef =
+        FirebaseFirestore.instance.collection('users').doc(user.uid);
+    await userRef.set(
+      {
+        'email': user.email,
+        'displayName': user.displayName,
+        'photoURL': user.photoURL,
+        'lastLoginAt': FieldValue.serverTimestamp(),
       },
+      SetOptions(merge: true),
+    );
+  }
+
+  Future<void> _addHabitDialog() async {
+    final result = await showDialog<_NewHabitResult>(
+      context: context,
+      builder: (context) => const _NewHabitDialog(),
     );
 
-    if (result != null && result.isNotEmpty) {
+    if (result != null && result.name.trim().isNotEmpty) {
       await _habitsRef.add({
-        'name': result,
+        'name': result.name.trim(),
+        'categoryId': result.categoryId,
+        'targetDays': result.targetDays,
         'createdAt': FieldValue.serverTimestamp(),
         'isArchived': false,
       });
@@ -253,6 +265,80 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {}); // trigger rebuild to refresh today's status
   }
 
+  Future<void> _archiveHabit(String habitId, String name) async {
+    try {
+      await _habitsRef.doc(habitId).update({'isArchived': true});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Arkiverte "$name".'),
+            duration: const Duration(milliseconds: 900),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Kunne ikke arkivere: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteHabit(String habitId, String name) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Slett vane'),
+          content: Text(
+            'Dette vil slette "$name" og all historikk for denne vanen. '
+            'Er du sikker?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Avbryt'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Slett'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final logsSnap =
+          await _logsRef.where('habitId', isEqualTo: habitId).get();
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in logsSnap.docs) {
+        batch.delete(doc.reference);
+      }
+      batch.delete(_habitsRef.doc(habitId));
+      await batch.commit();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Slettet "$name".'),
+            duration: const Duration(milliseconds: 900),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Kunne ikke slette vane: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _signOut() async {
     await FirebaseAuth.instance.signOut();
   }
@@ -266,6 +352,18 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Vaner'),
         actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      NotificationSettingsScreen(userId: widget.user.uid),
+                ),
+              );
+            },
+            icon: const Icon(Icons.notifications),
+            tooltip: 'Varsler',
+          ),
           IconButton(
             onPressed: _signOut,
             icon: const Icon(Icons.logout),
@@ -368,6 +466,16 @@ class _HomeScreenState extends State<HomeScreen> {
                               final habitId = doc.id;
                               final name =
                                   data['name'] as String? ?? 'Uten navn';
+                              final categoryId =
+                                  data['categoryId'] as String? ?? 'other';
+                              final category = habitCategories.firstWhere(
+                                (c) => c.id == categoryId,
+                                orElse: () => habitCategories.last,
+                              );
+                              final Object? targetDaysRaw =
+                                  data['targetDays'];
+                              final int? targetDays =
+                                  targetDaysRaw is int ? targetDaysRaw : null;
 
                               return InkWell(
                                 borderRadius: BorderRadius.circular(16),
@@ -378,6 +486,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         userId: widget.user.uid,
                                         habitId: habitId,
                                         habitName: name,
+                                        targetDays: targetDays,
                                       ),
                                     ),
                                   );
@@ -389,12 +498,116 @@ class _HomeScreenState extends State<HomeScreen> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          name,
-                                          style: const TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    name,
+                                                    style: const TextStyle(
+                                                      fontSize: 18,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Row(
+                                                    children: [
+                                                      Container(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 4,
+                                                        ),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: Colors.teal
+                                                              .withOpacity(
+                                                                  0.08),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      999),
+                                                        ),
+                                                        child: Text(
+                                                          '${category.emoji} ${category.label}',
+                                                          style:
+                                                              const TextStyle(
+                                                            fontSize: 11,
+                                                            fontWeight:
+                                                                FontWeight.w500,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      if (targetDays != null) ...[
+                                                        const SizedBox(
+                                                            width: 6),
+                                                        Container(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                            horizontal: 6,
+                                                            vertical: 3,
+                                                          ),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: Colors
+                                                                .amber
+                                                                .withOpacity(
+                                                                    0.12),
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        999),
+                                                          ),
+                                                          child: Text(
+                                                            '${targetDays}d mål',
+                                                            style:
+                                                                const TextStyle(
+                                                              fontSize: 10,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w500,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            PopupMenuButton<String>(
+                                              onSelected: (value) {
+                                                switch (value) {
+                                                  case 'archive':
+                                                    _archiveHabit(
+                                                        habitId, name);
+                                                    break;
+                                                  case 'delete':
+                                                    _deleteHabit(
+                                                        habitId, name);
+                                                    break;
+                                                }
+                                              },
+                                              itemBuilder: (context) => [
+                                                const PopupMenuItem(
+                                                  value: 'archive',
+                                                  child: Text('Arkiver vane'),
+                                                ),
+                                                const PopupMenuItem(
+                                                  value: 'delete',
+                                                  child: Text('Slett vane'),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
                                         ),
                                         const SizedBox(height: 8),
                                         Row(
@@ -408,8 +621,24 @@ class _HomeScreenState extends State<HomeScreen> {
                                             ),
                                             const SizedBox(width: 8),
                                             OutlinedButton.icon(
-                                              onPressed: () =>
-                                                  _setStatus(habitId, 'skipped'),
+                                              onPressed: () async {
+                                                await _setStatus(
+                                                    habitId, 'skipped');
+                                                if (mounted) {
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(
+                                                        'Notert. Du hoppet over "$name" i dag.',
+                                                      ),
+                                                      duration:
+                                                          const Duration(
+                                                              milliseconds:
+                                                                  900),
+                                                    ),
+                                                  );
+                                                }
+                                              },
                                               icon: const Icon(Icons.close),
                                               label: const Text('Hopp over'),
                                               style: OutlinedButton.styleFrom(
@@ -422,8 +651,24 @@ class _HomeScreenState extends State<HomeScreen> {
                                             ),
                                             const SizedBox(width: 8),
                                             FilledButton.icon(
-                                              onPressed: () =>
-                                                  _setStatus(habitId, 'done'),
+                                              onPressed: () async {
+                                                await _setStatus(
+                                                    habitId, 'done');
+                                                if (mounted) {
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(
+                                                        'Flott! Du gjorde "$name" ✅',
+                                                      ),
+                                                      duration:
+                                                          const Duration(
+                                                              milliseconds:
+                                                                  900),
+                                                    ),
+                                                  );
+                                                }
+                                              },
                                               icon: const Icon(Icons.check),
                                               label: const Text('Gjort'),
                                               style: FilledButton.styleFrom(
@@ -550,15 +795,11 @@ class _TodayStatus extends StatelessWidget {
           );
         }
 
-        if (!snapshot.hasData || !snapshot.data!.exists) {
-          return const Text(
-            'I dag: ikke satt',
-            style: TextStyle(color: Colors.grey),
-          );
+        String status = 'none';
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data();
+          status = data?['status'] as String? ?? 'none';
         }
-
-        final data = snapshot.data!.data();
-        final status = data?['status'] as String? ?? 'none';
 
         Color color;
         String label;
@@ -581,19 +822,23 @@ class _TodayStatus extends StatelessWidget {
             icon = Icons.radio_button_unchecked;
         }
 
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            Icon(icon, size: 18, color: color),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w500,
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: Row(
+            key: ValueKey(status),
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -837,6 +1082,17 @@ class _TodaySummaryCard extends StatelessWidget {
                           color: Colors.grey.shade600,
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          value: completionRate.clamp(0.0, 1.0),
+                          minHeight: 4,
+                          backgroundColor: Colors.grey.shade200,
+                          valueColor:
+                              const AlwaysStoppedAnimation<Color>(Colors.teal),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -849,17 +1105,19 @@ class _TodaySummaryCard extends StatelessWidget {
   }
 }
 
-/// Habit detail screen: 30-day stats
+/// Habit detail screen: 30-day stats + optional goal progress
 class HabitDetailScreen extends StatelessWidget {
   final String userId;
   final String habitId;
   final String habitName;
+  final int? targetDays;
 
   const HabitDetailScreen({
     super.key,
     required this.userId,
     required this.habitId,
     required this.habitName,
+    required this.targetDays,
   });
 
   CollectionReference<Map<String, dynamic>> get _logsRef =>
@@ -872,8 +1130,12 @@ class HabitDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final today = DateTime.now();
     final start = today.subtract(const Duration(days: 29)); // last 30 days
-    final startKey = _dateKeyFromDate(start);
-    final todayKey = _dateKeyFromDate(today);
+    final days = List.generate(
+      30,
+      (i) => _dateKeyFromDate(
+        start.add(Duration(days: i)),
+      ),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -882,21 +1144,24 @@ class HabitDetailScreen extends StatelessWidget {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: _logsRef
-                .where('habitId', isEqualTo: habitId)
-                .where('date', isGreaterThanOrEqualTo: startKey)
-                .where('date', isLessThanOrEqualTo: todayKey)
-                .orderBy('date')
-                .snapshots(),
+          child: FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            future: _logsRef.where('habitId', isEqualTo: habitId).get(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
 
+              if (snapshot.hasError) {
+                return Center(
+                  child: Text(
+                    'Feil ved henting av historikk: ${snapshot.error}',
+                  ),
+                );
+              }
+
               final docs = snapshot.data?.docs ?? [];
 
-              // Map date -> status
+              // Map date -> status for all time
               final Map<String, String> byDate = {};
               for (final doc in docs) {
                 final data = doc.data();
@@ -907,29 +1172,31 @@ class HabitDetailScreen extends StatelessWidget {
                 }
               }
 
-              // Last 30 days keys, oldest -> newest
-              final days = List.generate(
-                30,
-                (i) => _dateKeyFromDate(
-                  start.add(Duration(days: i)),
-                ),
-              );
-
-              // Completion stats
-              int doneCount = 0;
-              int skippedCount = 0;
+              // Last 30 days stats
+              int doneLast30 = 0;
+              int skippedLast30 = 0;
               for (final d in days) {
                 final status = byDate[d];
                 if (status == 'done') {
-                  doneCount++;
+                  doneLast30++;
                 } else if (status == 'skipped') {
-                  skippedCount++;
+                  skippedLast30++;
                 }
               }
-              final completionRate =
-                  days.isEmpty ? 0.0 : doneCount / days.length;
+              final completionRateLast30 =
+                  days.isEmpty ? 0.0 : doneLast30 / days.length;
 
-              // Current streak (counting backwards from today)
+              // All-time done count for goal progress
+              int doneAllTime = 0;
+              for (final doc in docs) {
+                final data = doc.data();
+                final status = data['status'] as String?;
+                if (status == 'done') {
+                  doneAllTime++;
+                }
+              }
+
+              // Current streak (counting backwards from today, max 30 days)
               int currentStreak = 0;
               for (int i = 0; i < days.length; i++) {
                 final dKey = _dateKeyFromDate(
@@ -961,6 +1228,21 @@ class HabitDetailScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (targetDays != null && targetDays! > 0) ...[
+                      Text(
+                        'Mål for denne vanen',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 8),
+                      _GoalCard(
+                        targetDays: targetDays!,
+                        doneAllTime: doneAllTime,
+                      ),
+                      const SizedBox(height: 24),
+                    ],
                     Text(
                       'Siste 30 dager',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -970,23 +1252,28 @@ class HabitDetailScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        _StatChip(
-                          label: 'Streak nå',
-                          value: '${currentStreak}d',
-                          icon: Icons.local_fire_department,
+                        Expanded(
+                          child: _StatChip(
+                            label: 'Streak nå',
+                            value: '${currentStreak}d',
+                            icon: Icons.local_fire_department,
+                          ),
                         ),
                         const SizedBox(width: 8),
-                        _StatChip(
-                          label: 'Lengste streak',
-                          value: '${longestStreak}d',
-                          icon: Icons.emoji_events,
+                        Expanded(
+                          child: _StatChip(
+                            label: 'Lengste streak',
+                            value: '${longestStreak}d',
+                            icon: Icons.emoji_events,
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     _StatChip(
-                      label: 'Fullført',
-                      value: '${(completionRate * 100).round()}%',
+                      label: 'Fullført (30 dager)',
+                      value:
+                          '${(completionRateLast30 * 100).round()}%',
                       icon: Icons.check_circle,
                     ),
                     const SizedBox(height: 24),
@@ -1040,6 +1327,82 @@ class HabitDetailScreen extends StatelessWidget {
   }
 }
 
+/// Goal card shown when targetDays is set
+class _GoalCard extends StatelessWidget {
+  final int targetDays;
+  final int doneAllTime;
+
+  const _GoalCard({
+    required this.targetDays,
+    required this.doneAllTime,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final reached = doneAllTime >= targetDays;
+    final progress = targetDays > 0
+        ? (doneAllTime / targetDays).clamp(0.0, 1.0)
+        : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 4,
+            spreadRadius: 1,
+            color: Colors.black.withOpacity(0.03),
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                reached ? Icons.emoji_events : Icons.flag,
+                color: Colors.teal,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                reached ? 'Mål nådd 🎉' : 'Mål: $targetDays dager',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Fullført totalt: $doneAllTime / $targetDays dager',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 4,
+              backgroundColor: Colors.grey.shade200,
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(Colors.teal),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small stat card
 class _StatChip extends StatelessWidget {
   final String label;
   final String value;
@@ -1053,48 +1416,350 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              blurRadius: 4,
-              spreadRadius: 1,
-              color: Colors.black.withOpacity(0.03),
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 4,
+            spreadRadius: 1,
+            color: Colors.black.withOpacity(0.03),
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.teal),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Add-habit dialog: categories + suggestions + optional duration
+class _NewHabitResult {
+  final String name;
+  final String categoryId;
+  final int? targetDays;
+
+  _NewHabitResult({
+    required this.name,
+    required this.categoryId,
+    required this.targetDays,
+  });
+}
+
+class _NewHabitDialog extends StatefulWidget {
+  const _NewHabitDialog();
+
+  @override
+  State<_NewHabitDialog> createState() => _NewHabitDialogState();
+}
+
+class _NewHabitDialogState extends State<_NewHabitDialog> {
+  late String _selectedCategoryId;
+  final TextEditingController _controller = TextEditingController();
+  int? _targetDays;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCategoryId = habitCategories.first.id;
+    _targetDays = null; // no goal by default
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _selectSuggestion(String text) {
+    setState(() {
+      _controller.text = text;
+      _controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: text.length),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final suggestions =
+        habitSuggestions[_selectedCategoryId] ?? const <String>[];
+    final durationOptions = <int?>[null, 14, 30, 60, 90];
+
+    return AlertDialog(
+      title: const Text('Ny vane'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 18, color: Colors.teal),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+            const Text(
+              'Velg kategori',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: habitCategories.map((cat) {
+                final selected = cat.id == _selectedCategoryId;
+                return ChoiceChip(
+                  label: Text('${cat.emoji} ${cat.label}'),
+                  selected: selected,
+                  onSelected: (_) {
+                    setState(() {
+                      _selectedCategoryId = cat.id;
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            if (suggestions.isNotEmpty) ...[
+              const Text(
+                'Forslag',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: suggestions.map((s) {
+                  return ActionChip(
+                    label: Text(s),
+                    onPressed: () => _selectSuggestion(s),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+            ],
+            const Text(
+              'Varighet (valgfritt)',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: durationOptions.map((value) {
+                final selected = _targetDays == value;
+                String label;
+                if (value == null) {
+                  label = 'Ingen mål';
+                } else {
+                  label = '$value dager';
+                }
+                return ChoiceChip(
+                  label: Text(label),
+                  selected: selected,
+                  onSelected: (_) {
+                    setState(() {
+                      _targetDays = value;
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Eller skriv din egen',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _controller,
+              decoration: const InputDecoration(
+                hintText: 'f.eks. 10 push-ups',
+              ),
+              autofocus: true,
             ),
           ],
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Avbryt'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final text = _controller.text.trim();
+            if (text.isNotEmpty) {
+              Navigator.of(context).pop(
+                _NewHabitResult(
+                  name: text,
+                  categoryId: _selectedCategoryId,
+                  targetDays: _targetDays,
+                ),
+              );
+            }
+          },
+          child: const Text('Lagre'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Notification settings (stored in Firestore, backend can later read this)
+class NotificationSettingsScreen extends StatefulWidget {
+  final String userId;
+
+  const NotificationSettingsScreen({super.key, required this.userId});
+
+  @override
+  State<NotificationSettingsScreen> createState() =>
+      _NotificationSettingsScreenState();
+}
+
+class _NotificationSettingsScreenState
+    extends State<NotificationSettingsScreen> {
+  bool _loading = true;
+  bool _enabled = false;
+  TimeOfDay _time = const TimeOfDay(hour: 20, minute: 0);
+
+  DocumentReference<Map<String, dynamic>> get _settingsDoc =>
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .collection('settings')
+          .doc('notification');
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final snap = await _settingsDoc.get();
+    if (snap.exists) {
+      final data = snap.data()!;
+      _enabled = (data['enabled'] as bool?) ?? false;
+      final minuteOfDay = (data['minuteOfDay'] as int?) ?? (20 * 60);
+      _time = TimeOfDay(
+        hour: minuteOfDay ~/ 60,
+        minute: minuteOfDay % 60,
+      );
+    }
+    if (mounted) {
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    final minuteOfDay = _time.hour * 60 + _time.minute;
+
+    final data = {
+      'enabled': _enabled,
+      'minuteOfDay': minuteOfDay,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    // Keep existing subcollection doc
+    await _settingsDoc.set(
+      data,
+      SetOptions(merge: true),
+    );
+
+    // Mirror settings on the user root doc for easier backend queries
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.userId)
+        .set(
+      {
+        'notification': data,
+      },
+      SetOptions(merge: true),
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Varslingsinnstillinger lagret')),
+      );
+    }
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _time,
+    );
+    if (picked != null) {
+      setState(() {
+        _time = picked;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Varsler'),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: const Text('Daglig påminnelse'),
+                    subtitle: const Text(
+                        'Lagre når du vil få påminnelse om dagens vaner.'),
+                    value: _enabled,
+                    onChanged: (val) {
+                      setState(() {
+                        _enabled = val;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  ListTile(
+                    enabled: _enabled,
+                    onTap: _enabled ? _pickTime : null,
+                    leading: const Icon(Icons.schedule),
+                    title: const Text('Tidspunkt'),
+                    subtitle: Text(_time.format(context)),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: _save,
+                    child: const Text('Lagre'),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }
