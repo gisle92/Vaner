@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="no">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Vaner – små vaner, stor effekt</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Vaner er en enkel app for å bygge små, gode vaner på 10 sekunder om dagen."
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-content">
+        <div class="logo">Vaner</div>
+        <nav>
+          <a href="#features">Funksjoner</a>
+          <a href="#how-it-works">Slik fungerer det</a>
+          <a href="#download">Last ned</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="container hero-grid">
+          <div class="hero-text">
+            <h1>Små vaner for folk som har mye å gjøre.</h1>
+            <p>
+              Vaner hjelper deg å holde styr på 1–3 viktige vaner, logge dem på
+              sekunder og se ærlige, enkle statistikker. Ingen støy, ingen
+              gamification-helvete.
+            </p>
+            <div class="hero-cta">
+              <a href="#download" class="btn btn-primary">Få Vaner</a>
+              <a href="#features" class="btn btn-ghost">Se funksjoner</a>
+            </div>
+          </div>
+          <div class="hero-phone">
+            <div class="phone-frame">
+              <div class="phone-status-bar"></div>
+              <div class="phone-screen">
+                <div class="phone-header">
+                  <span>Vaner</span>
+                  <span class="phone-subtitle">Dagens vaner</span>
+                </div>
+                <div class="phone-card">
+                  <div class="phone-card-title">Drikk et glass vann</div>
+                  <div class="phone-card-subtitle">Helse • 30d mål</div>
+                  <div class="phone-card-actions">
+                    <button class="chip chip-secondary">Hopp over</button>
+                    <button class="chip chip-primary">Gjort</button>
+                  </div>
+                </div>
+                <div class="phone-card">
+                  <div class="phone-card-title">5 min rydding</div>
+                  <div class="phone-card-subtitle">Annet • 14d mål</div>
+                  <div class="phone-dots">
+                    <span></span><span></span><span class="done"></span
+                    ><span class="done"></span><span></span><span></span
+                    ><span></span>
+                  </div>
+                </div>
+                <div class="phone-summary">
+                  2 / 3 vaner gjort i dag • 4d streak 🔥
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" class="section">
+        <div class="container">
+          <h2>Bygg vaner uten stress</h2>
+          <div class="feature-grid">
+            <div class="feature-card">
+              <h3>Fokuser på det viktigste</h3>
+              <p>
+                Start med 1–3 vaner som faktisk betyr noe. Små nok til at du
+                klarer dem på en dårlig dag.
+              </p>
+            </div>
+            <div class="feature-card">
+              <h3>10 sek logging</h3>
+              <p>
+                Ett trykk for <strong>Gjort</strong> eller
+                <strong>Hopp over</strong>. Resten gjør Vaner for deg.
+              </p>
+            </div>
+            <div class="feature-card">
+              <h3>Ærlige statistikker</h3>
+              <p>
+                Se streaks, 7- og 30-dagers progresjon, og ukentlige refleksjoner.
+                Ingen poeng, bare tydelig fremgang.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="how-it-works" class="section section-alt">
+        <div class="container two-col">
+          <div>
+            <h2>Slik fungerer Vaner</h2>
+            <ol class="how-list">
+              <li>Velg 1–3 små vaner du vil bygge.</li>
+              <li>Trykk “Gjort” eller “Hopp over” én gang om dagen.</li>
+              <li>Få små, ærlige tilbakemeldinger og ukentlige refleksjoner.</li>
+            </ol>
+          </div>
+          <div>
+            <p>
+              Du trenger ikke mer viljestyrke – du trenger mindre friksjon.
+              Vaner er laget for folk som ikke orker kompliserte “produktivitets-systemer”.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="download" class="section">
+        <div class="container download">
+          <h2>Kommer til App Store og Google Play</h2>
+          <p>
+            Vaner er under utvikling. Når appen er klar, legger vi ut lenker her.
+          </p>
+          <div class="store-buttons">
+            <button class="store-btn disabled">App Store (soon)</button>
+            <button class="store-btn disabled">Google Play (soon)</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+  <div class="container footer-content">
+    <span>© <span id="year"></span> Vaner</span>
+    <a href="privacy.html">Personvernerklæring</a>
+  </div>
+</footer>
+
+
+    <script>
+      document.getElementById("year").textContent =
+        new Date().getFullYear().toString();
+    </script>
+  </body>
+</html>
