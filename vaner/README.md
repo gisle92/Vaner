@@ -1,16 +1,32 @@
-# vaner
+# Vaner
 
-A new Flutter project.
+Vaner is a minimal habit-tracking app powered by Firebase Auth, Firestore and
+Firebase Cloud Messaging. Users can log daily progress, review streak stats and
+now share their progress directly to any installed social app.
 
-## Getting Started
+## Features
+- Email / OAuth sign-in through Firebase Auth
+- Daily log of each active habit with done / skipped actions
+- Detailed streak + goal stats per habit
+- Push notification scheduling (mobile)
+- One-tap sharing of today's progress to the native share sheet
 
-This project is a starting point for a Flutter application.
+## Sharing your vaner
+1. Open the home screen once the habits list has loaded.
+2. Tap the new share icon in the top app bar.
+3. Pick Instagram, Facebook or any other installed target from the OS share
+   sheet to publish your progress summary (e.g. “3 / 4 vaner gjort i dag”).
 
-A few resources to get you started if this is your first Flutter project:
+The shared message includes:
+- Total count of active habits
+- How many were completed, skipped or still undecided today
+- A friendly nudge that the progress comes from Vaner
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Local development
+```
+flutter pub get
+flutter run
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+> Note: `share_plus` is now required for the sharing UX. Run `flutter pub get`
+after pulling to make sure the plugin is downloaded before building.
