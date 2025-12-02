@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../dialogs/new_habit_dialog.dart';
 import '../../habit_suggestions.dart';
@@ -174,6 +175,77 @@ class _HomeScreenState extends State<HomeScreen> {
     await FirebaseAuth.instance.signOut();
   }
 
+  Future<void> _shareTodayProgress() async {
+    try {
+      final habitsSnapshot =
+          await _habitsRef.where('isArchived', isEqualTo: false).get();
+      final activeHabits = habitsSnapshot.docs;
+
+      if (activeHabits.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Legg til en vane før du deler progresjonen din.'),
+          ),
+        );
+        return;
+      }
+
+      final activeHabitIds = activeHabits.map((doc) => doc.id).toSet();
+      final totalHabits = activeHabitIds.length;
+
+      final logsSnapshot =
+          await _logsRef.where('date', isEqualTo: _todayKey).get();
+
+      int doneCount = 0;
+      int skippedCount = 0;
+
+      for (final doc in logsSnapshot.docs) {
+        final data = doc.data();
+        final habitId = data['habitId'] as String?;
+        final status = data['status'] as String?;
+        if (habitId == null ||
+            status == null ||
+            !activeHabitIds.contains(habitId)) {
+          continue;
+        }
+
+        if (status == 'done') {
+          doneCount++;
+        } else if (status == 'skipped') {
+          skippedCount++;
+        }
+      }
+
+      int notSetCount = totalHabits - doneCount - skippedCount;
+      if (notSetCount < 0) {
+        notSetCount = 0;
+      }
+      final completionPercent = totalHabits == 0
+          ? 0
+          : ((doneCount / totalHabits) * 100).round();
+      final dateLabel = DateFormat('d. MMMM').format(DateTime.now());
+
+      final shareText = StringBuffer()
+        ..writeln('Vaner – fremgang $dateLabel')
+        ..writeln(
+            'Fullført: $doneCount av $totalHabits vaner (${completionPercent}%)')
+        ..writeln('Hoppet over: $skippedCount • Ikke satt: $notSetCount')
+        ..writeln()
+        ..writeln('Bygg vanene dine med Vaner-appen ✨');
+
+      await Share.share(
+        shareText.toString(),
+        subject: 'Fremgang i Vaner',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kunne ikke dele progresjon: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final todayFormatted =
@@ -183,6 +255,11 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Vaner'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.ios_share),
+            tooltip: 'Del progresjon',
+            onPressed: _shareTodayProgress,
+          ),
           IconButton(
             icon: const Icon(Icons.info_outline),
             tooltip: 'Om Vaner',

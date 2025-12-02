@@ -18,6 +18,7 @@ dependencies:
   intl: ^0.20.2
   firebase_messaging: 
   url_launcher: ^6.3.0
+  share_plus: ^7.2.1
 
 
 dev_dependencies:
