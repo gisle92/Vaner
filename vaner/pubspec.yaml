@@ -17,6 +17,7 @@ dependencies:
   cloud_firestore: ^6.1.0
   intl: ^0.20.2
   firebase_messaging: 
+  url_launcher: ^6.3.0
 
 
 dev_dependencies:
