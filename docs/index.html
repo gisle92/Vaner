@@ -36,6 +36,35 @@
               <a href="#download" class="btn btn-primary">Få Vaner</a>
               <a href="#features" class="btn btn-ghost">Se funksjoner</a>
             </div>
+            <div class="share-row" aria-label="Del Vaner">
+              <div class="share-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true">
+                  <path
+                    d="M18 8.59V5a1 1 0 0 0-2 0v1.59l-8.3 8.3a1 1 0 0 0 1.4 1.42l8.3-8.3V11a1 1 0 0 0 2 0V8.59Z"
+                  ></path>
+                  <path
+                    d="M5 6h4a1 1 0 0 0 0-2H5a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-4a1 1 0 0 0-2 0v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z"
+                  ></path>
+                </svg>
+              </div>
+              <span class="share-label">Del Vaner med venner</span>
+              <button
+                type="button"
+                class="share-pill instagram"
+                data-share="instagram"
+              >
+                <span class="share-dot" aria-hidden="true"></span>
+                Instagram
+              </button>
+              <button
+                type="button"
+                class="share-pill messenger"
+                data-share="messenger"
+              >
+                <span class="share-dot" aria-hidden="true"></span>
+                Messenger
+              </button>
+            </div>
           </div>
           <div class="hero-phone">
             <div class="phone-frame">
@@ -142,8 +171,55 @@
 
 
     <script>
-      document.getElementById("year").textContent =
-        new Date().getFullYear().toString();
+      const yearTarget = document.getElementById("year");
+      if (yearTarget) {
+        yearTarget.textContent = new Date().getFullYear().toString();
+      }
+
+      const shareButtons = document.querySelectorAll("[data-share]");
+      if (shareButtons.length) {
+        const shareUrl = window.location.href.split("#")[0];
+        const shareText =
+          "Vaner – bygg små, gode vaner på 10 sekunder om dagen.";
+        const encodedUrl = encodeURIComponent(shareUrl);
+        const encodedText = encodeURIComponent(shareText);
+
+        const shareTargets = {
+          instagram: {
+            fallback: `https://www.instagram.com/sharing/share-offsite/?url=${encodedUrl}`,
+          },
+          messenger: {
+            fallback: `https://m.me/?link=${encodedUrl}&ref=vaner_share&text=${encodedText}`,
+          },
+        };
+
+        shareButtons.forEach((button) => {
+          button.addEventListener("click", async () => {
+            const platform = button.dataset.share;
+            const target = shareTargets[platform];
+            if (!target) {
+              return;
+            }
+
+            let shareWindow = null;
+            if (target.fallback) {
+              shareWindow = window.open(target.fallback, "_blank", "noopener");
+            }
+
+            if (!shareWindow && navigator.share) {
+              try {
+                await navigator.share({
+                  title: "Vaner",
+                  text: shareText,
+                  url: shareUrl,
+                });
+              } catch (error) {
+                console.warn("Deling ble avbrutt", error);
+              }
+            }
+          });
+        });
+      }
     </script>
   </body>
 </html>
