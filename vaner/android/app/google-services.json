@@ -14,6 +14,66 @@
       },
       "oauth_client": [
         {
+          "client_id": "487621717466-kt09d3us86s5gs14q7qhtv9ej6omqfqg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.vaner",
+            "certificate_hash": "cad110966a7b4857e52a24fa5609dc67c7482b93"
+          }
+        },
+        {
+          "client_id": "487621717466-0dggen71k5bithdeileteieh6pcjirlr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCw9jYFPqnVfd6dAW8VqDWkzfJvENgOU9s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "487621717466-0dggen71k5bithdeileteieh6pcjirlr.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "487621717466-9gf8r31cf34nvhuso9oovg68lr26r9gu.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.vaner"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:487621717466:android:42f03c3382b17f14a9a4e3",
+        "android_client_info": {
+          "package_name": "no.gisle.vaner"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "487621717466-19i91infbemai9rfnc9s1uf20hk61eor.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "no.gisle.vaner",
+            "certificate_hash": "c3f249cdd2c9f795a1b62571e53b3876507b6fac"
+          }
+        },
+        {
+          "client_id": "487621717466-u6mbshovqmg3aeuln8fe3re5dej8k7sc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "no.gisle.vaner",
+            "certificate_hash": "cad110966a7b4857e52a24fa5609dc67c7482b93"
+          }
+        },
+        {
           "client_id": "487621717466-0dggen71k5bithdeileteieh6pcjirlr.apps.googleusercontent.com",
           "client_type": 3
         }

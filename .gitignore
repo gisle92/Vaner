@@ -68,3 +68,7 @@ node_modules/
 # dataconnect generated files
 .dataconnect
 flutter/
+
+# Android signing keys (DO NOT COMMIT)
+android/app/release-keystore.jks
+android/key.properties
