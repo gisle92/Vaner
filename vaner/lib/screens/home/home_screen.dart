@@ -27,6 +27,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const String _shareBaseUrl = 'https://vaner-f83ef.web.app';
+
   CollectionReference<Map<String, dynamic>> get _habitsRef =>
       FirebaseFirestore.instance
           .collection('users')
@@ -232,7 +234,8 @@ class _HomeScreenState extends State<HomeScreen> {
             'Fullført: $doneCount av $totalHabits vaner (${completionPercent}%)')
         ..writeln('Hoppet over: $skippedCount • Ikke satt: $notSetCount')
         ..writeln()
-        ..writeln('Bygg vanene dine med Vaner-appen ✨');
+        ..writeln('Bygg vanene dine med Vaner-appen ✨')
+        ..writeln('${_shareBaseUrl}/s?name=${Uri.encodeComponent("Vaner")}');
 
       await Share.share(
         shareText.toString(),
@@ -242,6 +245,26 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Kunne ikke dele progresjon: $e')),
+      );
+    }
+  }
+
+  Future<void> _shareHabit(String habitName) async {
+    try {
+      final url = '$_shareBaseUrl/s?name=${Uri.encodeComponent(habitName)}';
+      final text = StringBuffer()
+        ..writeln('Jeg bygger vanen "$habitName" i Vaner.')
+        ..writeln()
+        ..writeln(url);
+
+      await Share.share(
+        text.toString(),
+        subject: 'Vane i Vaner',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kunne ikke dele vane: $e')),
       );
     }
   }
@@ -498,6 +521,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                             PopupMenuButton<String>(
                                               onSelected: (value) {
                                                 switch (value) {
+                                                  case 'share':
+                                                    _shareHabit(name);
+                                                    break;
                                                   case 'archive':
                                                     _archiveHabit(
                                                         habitId, name);
@@ -509,6 +535,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 }
                                               },
                                               itemBuilder: (context) => [
+                                                const PopupMenuItem(
+                                                  value: 'share',
+                                                  child: Text('Del vane'),
+                                                ),
                                                 const PopupMenuItem(
                                                   value: 'archive',
                                                   child: Text('Arkiver vane'),
