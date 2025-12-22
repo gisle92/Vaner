@@ -16,5 +16,23 @@
         "npm --prefix \"$RESOURCE_DIR\" run build"
       ]
     }
-  ]
+  ],
+  "hosting": {
+    "public": "landing",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/s",
+        "function": "sharePage"
+      },
+      {
+        "source": "/og.svg",
+        "function": "shareOgImage"
+      }
+    ]
+  }
 }
