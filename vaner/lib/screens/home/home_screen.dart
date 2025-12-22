@@ -27,17 +27,17 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  CollectionReference<Map<String, dynamic>> get _habitsRef =>
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.user.uid)
-          .collection('habits');
+  CollectionReference<Map<String, dynamic>> get _habitsRef => FirebaseFirestore
+      .instance
+      .collection('users')
+      .doc(widget.user.uid)
+      .collection('habits');
 
-  CollectionReference<Map<String, dynamic>> get _logsRef =>
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.user.uid)
-          .collection('habitLogs');
+  CollectionReference<Map<String, dynamic>> get _logsRef => FirebaseFirestore
+      .instance
+      .collection('users')
+      .doc(widget.user.uid)
+      .collection('habitLogs');
 
   String get _todayKey => dateKeyFromDate(DateTime.now());
 
@@ -51,17 +51,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _ensureUserProfile() async {
     final user = widget.user;
-    final userRef =
-        FirebaseFirestore.instance.collection('users').doc(user.uid);
-    await userRef.set(
-      {
-        'email': user.email,
-        'displayName': user.displayName,
-        'photoURL': user.photoURL,
-        'lastLoginAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    final userRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid);
+    await userRef.set({
+      'email': user.email,
+      'displayName': user.displayName,
+      'photoURL': user.photoURL,
+      'lastLoginAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> _addHabitDialog() async {
@@ -84,15 +82,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _setStatus(String habitId, String status) async {
     // status: 'done' or 'skipped'
     final logId = '${habitId}_$_todayKey';
-    await _logsRef.doc(logId).set(
-      {
-        'habitId': habitId,
-        'date': _todayKey,
-        'status': status,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _logsRef.doc(logId).set({
+      'habitId': habitId,
+      'date': _todayKey,
+      'status': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
     setState(() {}); // trigger rebuild to refresh today's status
   }
@@ -110,9 +105,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Kunne ikke arkivere: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Kunne ikke arkivere: $e')));
       }
     }
   }
@@ -144,8 +139,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (confirm != true) return;
 
     try {
-      final logsSnap =
-          await _logsRef.where('habitId', isEqualTo: habitId).get();
+      final logsSnap = await _logsRef
+          .where('habitId', isEqualTo: habitId)
+          .get();
 
       final batch = FirebaseFirestore.instance.batch();
       for (final doc in logsSnap.docs) {
@@ -164,9 +160,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Kunne ikke slette vane: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Kunne ikke slette vane: $e')));
       }
     }
   }
@@ -177,8 +173,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _shareTodayProgress() async {
     try {
-      final habitsSnapshot =
-          await _habitsRef.where('isArchived', isEqualTo: false).get();
+      final habitsSnapshot = await _habitsRef
+          .where('isArchived', isEqualTo: false)
+          .get();
       final activeHabits = habitsSnapshot.docs;
 
       if (activeHabits.isEmpty) {
@@ -194,8 +191,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final activeHabitIds = activeHabits.map((doc) => doc.id).toSet();
       final totalHabits = activeHabitIds.length;
 
-      final logsSnapshot =
-          await _logsRef.where('date', isEqualTo: _todayKey).get();
+      final logsSnapshot = await _logsRef
+          .where('date', isEqualTo: _todayKey)
+          .get();
 
       int doneCount = 0;
       int skippedCount = 0;
@@ -229,27 +227,26 @@ class _HomeScreenState extends State<HomeScreen> {
       final shareText = StringBuffer()
         ..writeln('Vaner – fremgang $dateLabel')
         ..writeln(
-            'Fullført: $doneCount av $totalHabits vaner (${completionPercent}%)')
+          'Fullført: $doneCount av $totalHabits vaner (${completionPercent}%)',
+        )
         ..writeln('Hoppet over: $skippedCount • Ikke satt: $notSetCount')
         ..writeln()
         ..writeln('Bygg vanene dine med Vaner-appen ✨');
 
-      await Share.share(
-        shareText.toString(),
-        subject: 'Fremgang i Vaner',
-      );
+      await Share.share(shareText.toString(), subject: 'Fremgang i Vaner');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Kunne ikke dele progresjon: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Kunne ikke dele progresjon: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final todayFormatted =
-        DateFormat('EEEE d. MMMM').format(DateTime.now()); // system locale
+    final todayFormatted = DateFormat(
+      'EEEE d. MMMM',
+    ).format(DateTime.now()); // system locale
 
     return Scaffold(
       appBar: AppBar(
@@ -264,9 +261,9 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.info_outline),
             tooltip: 'Om Vaner',
             onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AboutScreen()),
-              );
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const AboutScreen()));
             },
           ),
           IconButton(
@@ -299,9 +296,9 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(
                 'Dagens vaner',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF0F172A),
-                    ),
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF0F172A),
+                ),
               ),
               const SizedBox(height: 8),
               Expanded(
@@ -389,8 +386,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 orElse: () => habitCategories.last,
                               );
                               final Object? targetDaysRaw = data['targetDays'];
-                              final int? targetDays =
-                                  targetDaysRaw is int ? targetDaysRaw : null;
+                              final int? targetDays = targetDaysRaw is int
+                                  ? targetDaysRaw
+                                  : null;
 
                               return InkWell(
                                 borderRadius: BorderRadius.circular(16),
@@ -435,58 +433,61 @@ class _HomeScreenState extends State<HomeScreen> {
                                                     children: [
                                                       Container(
                                                         padding:
-                                                            const EdgeInsets
-                                                                .symmetric(
-                                                          horizontal: 8,
-                                                          vertical: 4,
-                                                        ),
-                                                        decoration:
-                                                            BoxDecoration(
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 4,
+                                                            ),
+                                                        decoration: BoxDecoration(
                                                           color: Colors.teal
-                                                              .withOpacity(0.08),
+                                                              .withOpacity(
+                                                                0.08,
+                                                              ),
                                                           borderRadius:
-                                                              BorderRadius
-                                                                  .circular(999),
+                                                              BorderRadius.circular(
+                                                                999,
+                                                              ),
                                                         ),
                                                         child: Text(
                                                           '${category.emoji} ${category.label}',
                                                           style:
                                                               const TextStyle(
-                                                            fontSize: 11,
-                                                            fontWeight:
-                                                                FontWeight.w500,
-                                                          ),
+                                                                fontSize: 11,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w500,
+                                                              ),
                                                         ),
                                                       ),
-                                                      if (targetDays != null) ...[
-                                                        const SizedBox(width: 6),
+                                                      if (targetDays !=
+                                                          null) ...[
+                                                        const SizedBox(
+                                                          width: 6,
+                                                        ),
                                                         Container(
                                                           padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                            horizontal: 6,
-                                                            vertical: 3,
-                                                          ),
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            color: Colors
-                                                                .amber
+                                                              const EdgeInsets.symmetric(
+                                                                horizontal: 6,
+                                                                vertical: 3,
+                                                              ),
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.amber
                                                                 .withOpacity(
-                                                                    0.12),
+                                                                  0.12,
+                                                                ),
                                                             borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        999),
+                                                                BorderRadius.circular(
+                                                                  999,
+                                                                ),
                                                           ),
                                                           child: Text(
                                                             '${targetDays}d mål',
                                                             style:
                                                                 const TextStyle(
-                                                              fontSize: 10,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w500,
-                                                            ),
+                                                                  fontSize: 10,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w500,
+                                                                ),
                                                           ),
                                                         ),
                                                       ],
@@ -500,11 +501,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 switch (value) {
                                                   case 'archive':
                                                     _archiveHabit(
-                                                        habitId, name);
+                                                      habitId,
+                                                      name,
+                                                    );
                                                     break;
                                                   case 'delete':
-                                                    _deleteHabit(
-                                                        habitId, name);
+                                                    _deleteHabit(habitId, name);
                                                     break;
                                                 }
                                               },
@@ -535,18 +537,20 @@ class _HomeScreenState extends State<HomeScreen> {
                                             OutlinedButton.icon(
                                               onPressed: () async {
                                                 await _setStatus(
-                                                    habitId, 'skipped');
+                                                  habitId,
+                                                  'skipped',
+                                                );
                                                 if (mounted) {
-                                                  ScaffoldMessenger.of(context)
-                                                      .showSnackBar(
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
                                                     SnackBar(
                                                       content: Text(
                                                         'Notert. Du hoppet over "$name" i dag.',
                                                       ),
-                                                      duration:
-                                                          const Duration(
-                                                              milliseconds:
-                                                                  900),
+                                                      duration: const Duration(
+                                                        milliseconds: 900,
+                                                      ),
                                                     ),
                                                   );
                                                 }
@@ -556,27 +560,29 @@ class _HomeScreenState extends State<HomeScreen> {
                                               style: OutlinedButton.styleFrom(
                                                 padding:
                                                     const EdgeInsets.symmetric(
-                                                  horizontal: 8,
-                                                  vertical: 6,
-                                                ),
+                                                      horizontal: 8,
+                                                      vertical: 6,
+                                                    ),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
                                             FilledButton.icon(
                                               onPressed: () async {
                                                 await _setStatus(
-                                                    habitId, 'done');
+                                                  habitId,
+                                                  'done',
+                                                );
                                                 if (mounted) {
-                                                  ScaffoldMessenger.of(context)
-                                                      .showSnackBar(
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
                                                     SnackBar(
                                                       content: Text(
                                                         'Flott! Du gjorde "$name" ✅',
                                                       ),
-                                                      duration:
-                                                          const Duration(
-                                                              milliseconds:
-                                                                  900),
+                                                      duration: const Duration(
+                                                        milliseconds: 900,
+                                                      ),
                                                     ),
                                                   );
                                                 }
@@ -586,9 +592,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                               style: FilledButton.styleFrom(
                                                 padding:
                                                     const EdgeInsets.symmetric(
-                                                  horizontal: 10,
-                                                  vertical: 6,
-                                                ),
+                                                      horizontal: 10,
+                                                      vertical: 6,
+                                                    ),
                                               ),
                                             ),
                                           ],

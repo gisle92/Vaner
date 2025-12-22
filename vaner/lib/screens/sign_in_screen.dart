@@ -1,22 +1,39 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 /// Simple Google sign-in screen with nicer styling
 class SignInScreen extends StatelessWidget {
   const SignInScreen({super.key});
 
   Future<void> _signInWithGoogle(BuildContext context) async {
-    final provider = GoogleAuthProvider();
-
     try {
       if (kIsWeb) {
-        // Web: popup sign-in
+        // 🌐 Web: browser-based popup
+        final provider = GoogleAuthProvider();
         await FirebaseAuth.instance.signInWithPopup(provider);
-      } else {
-        // Mobile / desktop: new provider API in firebase_auth 6.x
-        await FirebaseAuth.instance.signInWithProvider(provider);
+        return;
       }
+
+      // 📱 Mobile (Android / iOS): native Google Sign-In
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
+      if (googleUser == null) {
+        // User cancelled sign-in
+        return;
+      }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      await FirebaseAuth.instance.signInWithCredential(credential);
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Kunne ikke logge inn: ${e.code}')),
