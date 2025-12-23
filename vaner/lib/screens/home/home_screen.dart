@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
@@ -27,6 +28,13 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  /// Public base URL for Firebase Hosting share pages.
+  /// Can be overridden via `--dart-define=VANER_SHARE_BASE_URL=...`.
+  static const String _shareBaseUrl = String.fromEnvironment(
+    'VANER_SHARE_BASE_URL',
+    defaultValue: 'https://vaner-f83ef.web.app',
+  );
+
   CollectionReference<Map<String, dynamic>> get _habitsRef => FirebaseFirestore
       .instance
       .collection('users')
@@ -171,6 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await FirebaseAuth.instance.signOut();
   }
 
+  /// Share overall progress (text + share URL that will unfurl into a rich preview).
   Future<void> _shareTodayProgress() async {
     try {
       final habitsSnapshot = await _habitsRef
@@ -231,7 +240,8 @@ class _HomeScreenState extends State<HomeScreen> {
         )
         ..writeln('Hoppet over: $skippedCount • Ikke satt: $notSetCount')
         ..writeln()
-        ..writeln('Bygg vanene dine med Vaner-appen ✨');
+        ..writeln('Bygg vanene dine med Vaner-appen ✨')
+        ..writeln('$_shareBaseUrl/s?name=${Uri.encodeComponent("Vaner")}');
 
       await Share.share(shareText.toString(), subject: 'Fremgang i Vaner');
     } catch (e) {
@@ -239,6 +249,24 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Kunne ikke dele progresjon: $e')));
+    }
+  }
+
+  /// Share a single habit using the Hosting share endpoint (rich preview).
+  Future<void> _shareHabit(String habitName) async {
+    try {
+      final url = '$_shareBaseUrl/s?name=${Uri.encodeComponent(habitName)}';
+      final text = StringBuffer()
+        ..writeln('Jeg bygger vanen "$habitName" i Vaner.')
+        ..writeln()
+        ..writeln(url);
+
+      await Share.share(text.toString(), subject: 'Vane i Vaner');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Kunne ikke dele vane: $e')));
     }
   }
 
@@ -499,6 +527,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                             PopupMenuButton<String>(
                                               onSelected: (value) {
                                                 switch (value) {
+                                                  case 'share':
+                                                    _shareHabit(name);
+                                                    break;
                                                   case 'archive':
                                                     _archiveHabit(
                                                       habitId,
@@ -511,6 +542,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 }
                                               },
                                               itemBuilder: (context) => [
+                                                const PopupMenuItem(
+                                                  value: 'share',
+                                                  child: Text('Del vane'),
+                                                ),
                                                 const PopupMenuItem(
                                                   value: 'archive',
                                                   child: Text('Arkiver vane'),
