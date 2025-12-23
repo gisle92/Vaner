@@ -37,30 +37,31 @@ android {
         // This is the applicationId Google Play uses. Must stay the same for all future updates.
         applicationId = "no.gisle.vaner"
 
-        // Use a safe minSdk for Firebase etc.
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
 
-        // These are taken from your pubspec.yaml (version: 1.0.0+1)
+        // Taken from pubspec.yaml (version: x.y.z+code)
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
     signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"]?.toString()
+                keyPassword = keystoreProperties["keyPassword"]?.toString()
+                storeFile = keystoreProperties["storeFile"]?.let { file(it.toString()) }
+                storePassword = keystoreProperties["storePassword"]?.toString()
+            }
         }
     }
 
     buildTypes {
         release {
-            // Use the real release keystore (NOT debug)
-            signingConfig = signingConfigs.getByName("release")
-
-            // Optional optimizations:
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            // Optional optimizations for Play Store:
             // isMinifyEnabled = true
             // isShrinkResources = true
         }
